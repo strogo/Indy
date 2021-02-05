@@ -3284,7 +3284,7 @@ function DoLconvCharsToBytes(const ACharset: string; AChars: PIdWideChar; ACharC
   ABytes: PByte; AByteCount: Integer): Integer;
 var
   LTmpStr : TIdUnicodeString;
-  LConverted : RawByteString;
+  LUTF8, LConverted : RawByteString;
   LEncoded : Boolean;
 begin
   Result := 0;
@@ -3294,13 +3294,19 @@ begin
   end;
 
   SetString(LTmpStr, PIdWideChar(AChars), ACharCount);
-  LConverted := ConvertEncodingFromUTF8(UTF8Encode(LTmpStr), ACharSet, LEncoded);
+  LUTF8 := UTF8Encode(LTmpStr);
 
-  if not LEncoded then begin
-  begin
-    // TODO: uncomment this?
-    //raise EIdException.CreateResFmt(@RSInvalidCharSetConv, [ACharSet, cUTF16CharSet]);
-    Exit;
+  // For UTF-8 to UTF-8, ConvertEncodingFromUTF8() does nothing and returns False (FPC bug?).
+  // The input has already been converted above, so let's just use the existing bytes as-is...
+  if PosInStrArray(ACharSet, ['UTF-8', 'UTF8'], False) <> -1 then begin {do not localize}
+    LConverted := LUTF8;
+  end else begin
+    LConverted := ConvertEncodingFromUTF8(LUTF8, ACharSet, LEncoded);
+    if not LEncoded then begin
+      // TODO: uncomment this?
+      //raise EIdException.CreateResFmt(@RSInvalidCharSetConv, [ACharSet, cUTF16CharSet]);
+      Exit;
+    end;
   end;
 
   Result := Length(LConverted);
@@ -3474,6 +3480,7 @@ var
   LBytes, LConverted: RawByteString;
   LDecoded : TIdUnicodeString;
   LEncoded : Boolean;
+  C: TIdWideChar;
 begin
   Result := 0;
 
@@ -3482,13 +3489,18 @@ begin
   end;
 
   SetString(LBytes, PIdAnsiChar(ABytes), AByteCount);
-  LConverted := ConvertEncodingToUTF8(LBytes, ACharSet, LEncoded);
 
-  if not LEncoded then begin
-  begin
-    // TODO: uncomment this?
-    //raise EIdException.CreateResFmt(@RSInvalidCharSetConv, [ACharSet, cUTF16CharSet]);
-    Exit;
+  // For UTF-8 to UTF-8, ConvertEncodingToUTF8() does nothing and returns False (FPC bug?).
+  // The input is already in UTF-8, so let's just use the existing bytes as-is...
+  if PosInStrArray(ACharSet, ['UTF-8', 'UTF8'], False) <> -1 then begin {do not localize}
+    LConverted := LBytes;
+  end else begin
+    LConverted := ConvertEncodingToUTF8(LBytes, ACharSet, LEncoded);
+    if not LEncoded then begin
+      // TODO: uncomment this?
+      //raise EIdException.CreateResFmt(@RSInvalidCharSetConv, [ACharSet, cUTF16CharSet]);
+      Exit;
+    end;
   end;
 
   LDecoded := UTF8Decode(LConverted);
@@ -3498,7 +3510,8 @@ begin
     Result := IndyMin(Result, ACharCount);
     // RLebeau: if the last encoded character is a UTF-16 high surrogate, don't output it...
     if Result > 0 then begin
-      if (LDecoded[Result] >= $D800) and (LDecoded[Result] <= $DBFF) then begin
+      C := LDecoded[Result];
+      if (C >= #$D800) and (C <= #$DBFF) then begin
         Dec(Result);
       end;
     end;
@@ -5450,7 +5463,8 @@ begin
   //if these asserts fail, then it indicates an attempted buffer overrun.
   Assert(ASourceIndex >= 0);
   Assert((ASourceIndex+ALength) <= Length(ASource));
-  Move(ASource[ASourceIndex], VDest[ADestIndex], ALength);
+  if ALength > 0 then
+    Move(ASource[ASourceIndex], VDest[ADestIndex], ALength);
   {$ENDIF}
 end;
 
@@ -6414,8 +6428,8 @@ function IsHexidecimal(const AChar: Char): Boolean; overload;
 {$IFDEF USE_INLINE}inline;{$ENDIF}
 begin
   Result := ((AChar >= '0') and (AChar <= '9'))  {Do not Localize}
-         or ((AChar >= 'A') and (AChar <= 'F'))  {Do not Localize}
-         or ((AChar >= 'a') and (AChar <= 'f')); {Do not Localize}
+   or ((AChar >= 'A') and (AChar <= 'F')) {Do not Localize}
+   or ((AChar >= 'a') and (AChar <= 'f')); {Do not Localize}
 end;
 
 function IsHexidecimal(const AString: string; const ALength: Integer = -1; const AIndex: Integer = 1): Boolean; overload;
