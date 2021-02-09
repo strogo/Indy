@@ -3296,11 +3296,21 @@ begin
   SetString(LTmpStr, PIdWideChar(AChars), ACharCount);
   LUTF8 := UTF8Encode(LTmpStr);
 
-  // For UTF-8 to UTF-8, ConvertEncodingFromUTF8() does nothing and returns False (FPC bug?).
-  // The input has already been converted above, so let's just use the existing bytes as-is...
-  if PosInStrArray(ACharSet, ['UTF-8', 'UTF8'], False) <> -1 then begin {do not localize}
-    LConverted := LUTF8;
-  end else begin
+  case PosInStrArray(ACharSet, ['UTF-8', 'UTF8', EncodingAnsi], False) of {do not localize}
+    0, 1: begin
+      // For UTF-8 to UTF-8, ConvertEncodingFromUTF8() does nothing and returns False (FPC bug?).
+      // The input has already been converted above, so let's just use the existing bytes as-is...
+      LConverted := LUTF8;
+    end;
+    2: begin
+      // For UTF-8 to ANSI (system enc), ConvertEncodingFromUTF8() does nothing and returns False
+      // if ConvertUTF8ToAnsi is not assigned, so let's just assume UTF-8 for now...
+      LConverted := ConvertEncodingFromUTF8(LUTF8, ACharSet, LEncoded);
+      if not LEncoded then begin
+        LConverted := LUTF8;
+      end;
+    end;
+  else
     LConverted := ConvertEncodingFromUTF8(LUTF8, ACharSet, LEncoded);
     if not LEncoded then begin
       // TODO: uncomment this?
@@ -3490,11 +3500,21 @@ begin
 
   SetString(LBytes, PIdAnsiChar(ABytes), AByteCount);
 
-  // For UTF-8 to UTF-8, ConvertEncodingToUTF8() does nothing and returns False (FPC bug?).
-  // The input is already in UTF-8, so let's just use the existing bytes as-is...
-  if PosInStrArray(ACharSet, ['UTF-8', 'UTF8'], False) <> -1 then begin {do not localize}
-    LConverted := LBytes;
-  end else begin
+  case PosInStrArray(ACharSet, ['UTF-8', 'UTF8', EncodingAnsi], False) of {do not localize}
+    0, 1: begin
+      // For UTF-8 to UTF-8, ConvertEncodingToUTF8() does nothing and returns False (FPC bug?).
+      // The input is already in UTF-8, so let's just use the existing bytes as-is...
+      LConverted := LBytes;
+    end;
+    2: begin
+      // For ANSI (system enc) to UTF-8, ConvertEncodingToUTF8() does nothing and returns False
+      // if ConvertAnsiToUTF8 is not assigned, so let's just assume UTF-8 for now...
+      LConverted := ConvertEncodingToUTF8(LBytes, ACharSet, LEncoded);
+      if not LEncoded then begin
+        LConverted := LBytes;
+      end;
+    end;
+  else
     LConverted := ConvertEncodingToUTF8(LBytes, ACharSet, LEncoded);
     if not LEncoded then begin
       // TODO: uncomment this?
